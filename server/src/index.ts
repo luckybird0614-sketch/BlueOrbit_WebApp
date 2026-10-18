@@ -13,6 +13,13 @@ const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const app = express();
 app.use(express.json({ limit: "32kb" }));
 app.use(cookieParser());
+app.use((req, _res, next) => {
+  const prefix = "/blueorbit";
+  if (req.url === prefix || req.url.startsWith(`${prefix}/`)) {
+    req.url = req.url.slice(prefix.length) || "/";
+  }
+  next();
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({

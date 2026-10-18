@@ -31,7 +31,7 @@ export type Reading = {
   } | null;
 };
 
-const apiRoot = import.meta.env.PROD ? import.meta.env.BASE_URL.replace(/\/$/, "") : "";
+const apiRoot = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiRoot}${path}`, {
