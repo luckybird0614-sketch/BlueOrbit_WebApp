@@ -31,8 +31,10 @@ export type Reading = {
   } | null;
 };
 
+const apiRoot = import.meta.env.PROD ? import.meta.env.BASE_URL.replace(/\/$/, "") : "";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(`${apiRoot}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
