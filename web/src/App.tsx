@@ -79,7 +79,7 @@ function Brand() {
   return (
     <>
       <div className="spacer" />
-      <img className="logo" src="/logo_blueorbit.png" alt="" />
+      <img className="logo" src="logo_blueorbit.png" alt="" />
       <p className="wordmark">BlueOrbit</p>
     </>
   );
