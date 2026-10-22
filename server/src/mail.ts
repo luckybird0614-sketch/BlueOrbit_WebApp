@@ -1,7 +1,9 @@
 import nodemailer from "nodemailer";
 
+const MAILCHIMP_HOST = "smtp.mandrillapp.com";
+
 export function mailConfigured(): boolean {
-  return Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_FROM?.trim());
+  return Boolean(process.env.SMTP_FROM?.trim() && process.env.SMTP_USER?.trim() && process.env.SMTP_PASSWORD?.trim());
 }
 
 export function appUrl(): string {
@@ -13,17 +15,26 @@ export async function sendMail(to: string, subject: string, text: string): Promi
     throw new Error("Email is not configured");
   }
   const port = Number(process.env.SMTP_PORT) || 587;
-  const user = process.env.SMTP_USER?.trim();
+  const secure = port === 465;
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
+    host: process.env.SMTP_HOST?.trim() || MAILCHIMP_HOST,
     port,
-    secure: port === 465,
-    auth: user ? { user, pass: process.env.SMTP_PASSWORD ?? "" } : undefined,
+    secure,
+    requireTLS: !secure,
+    auth: {
+      user: process.env.SMTP_USER!.trim(),
+      pass: process.env.SMTP_PASSWORD ?? "",
+    },
   });
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM,
-    to,
-    subject,
-    text,
-  });
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to,
+      subject,
+      text,
+    });  
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
 }
