@@ -9,7 +9,7 @@ import { hashPassword, verifyPassword } from "./password.js";
 
 const COOKIE = "bo_session";
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
-const publicBase = "/blueorbit/api";
+const publicBase = "/api";
 
 const app = express();
 app.use(express.json({ limit: "32kb" }));
