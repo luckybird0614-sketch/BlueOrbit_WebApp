@@ -9,17 +9,10 @@ import { hashPassword, verifyPassword } from "./password.js";
 
 const COOKIE = "bo_session";
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
-const publicBase = "/api";
 
 const app = express();
 app.use(express.json({ limit: "32kb" }));
 app.use(cookieParser());
-app.use((req, _res, next) => {
-  if (req.url === publicBase || req.url.startsWith(`${publicBase}/`)) {
-    req.url = req.url.slice(publicBase.length) || "/";
-  }
-  next();
-});
 
 app.get("/api/health", (_req, res) => {
   res.json({
