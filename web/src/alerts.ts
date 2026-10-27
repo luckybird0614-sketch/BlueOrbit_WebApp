@@ -206,12 +206,12 @@ function buildAlert(
   const battery = `${Math.round(reading.batteryPercentage)}%`;
   const message =
     kind === "A"
-      ? `Hi ${name}, Your medication is at ${temp}. That is within your set range of ${range}.`
+      ? `Hi ${name},\n\nYour medication is at ${temp}. That is within your set range of ${range}.`
       : kind === "B"
-        ? `Hi ${name}, The temperature of your medication has changed by ${change}. Please check where it is stored. Your set range is ${range}.`
+        ? `Hi ${name},\n\nThe temperature of your medication has changed by ${change}.\n\nPlease check where it is stored. Your set range is ${range}.`
         : kind === "C"
-          ? `Hi ${name}, The temperature of your medication is now ${temp}. That is outside your set range of ${range}. If you are unsure whether your medication is still safe to use, contact your pharmacist or doctor.`
-          : `Hi ${name}, The battery in your BlueOrbit tag is low (${battery}). When the battery runs out the tag stops reporting, and your medication will no longer be monitored. To arrange a replacement tag, contact Ask@BlueOrbit.com`;
+          ? `Hi ${name},\n\nThe temperature of your medication is now ${temp}. That is outside your set range of ${range}.\n\nIf you are unsure whether your medication is still safe to use, contact your pharmacist or doctor.`
+          : `Hi ${name},\n\nThe battery in your BlueOrbit tag is low (${battery}).\n\nWhen the battery runs out the tag stops reporting, and your medication will no longer be monitored.\n\nTo arrange a replacement tag, contact apps@blueorbit.com`;
   return { deviceId: reading.deviceId, kind, title: TITLES[kind], message, sound: SOUNDS[kind] };
 }
 

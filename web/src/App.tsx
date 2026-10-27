@@ -330,6 +330,83 @@ function Auth({
   );
 }
 
+const APP_VERSION = "0.3.0";
+const USE_PERIOD_DAYS = 56;
+const STALE_READING_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function usePeriodKey(userId: number): string {
+  return `bo-use-period:${userId}`;
+}
+
+function onboardingKey(userId: number): string {
+  return `bo-onboarding:${userId}`;
+}
+
+function ensureUsePeriodStart(userId: number): number {
+  const existing = Number(localStorage.getItem(usePeriodKey(userId)));
+  if (existing > 0) {
+    return existing;
+  }
+  const now = Date.now();
+  localStorage.setItem(usePeriodKey(userId), String(now));
+  return now;
+}
+
+function dayOfUsePeriod(start: number, now: number): number {
+  if (start <= 0 || now < start) {
+    return 0;
+  }
+  return Math.floor((now - start) / DAY_MS) + 1;
+}
+
+function formatReadingAge(then: number, now: number): string {
+  const elapsed = now - then;
+  if (then <= 0 || elapsed < 60_000) {
+    return "just now";
+  }
+  const minutes = Math.floor(elapsed / 60_000);
+  if (minutes < 60) {
+    return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+  }
+  const hours = Math.floor(elapsed / 3_600_000);
+  if (hours < 24) {
+    return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  }
+  const days = Math.floor(elapsed / DAY_MS);
+  return days === 1 ? "1 day ago" : `${days} days ago`;
+}
+
+function formatReadingStamp(timestamp: number): string {
+  const date = new Date(timestamp);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const year = String(date.getFullYear()).slice(-2);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
+}
+
+function formatUseDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function feedbackHref(tag: string): string {
+  const body = [
+    "Tell us what happened, and what you expected instead:",
+    "",
+    "",
+    "",
+    "———",
+    "The details below help us investigate. Please leave them in place.",
+    `App version: ${APP_VERSION}`,
+    `Browser: ${navigator.userAgent}`,
+    `Tag: ${tag || "-"}`,
+  ].join("\n");
+  return `mailto:apps@blueorbit.com?subject=${encodeURIComponent(`MedsTemp feedback — version ${APP_VERSION}`)}&body=${encodeURIComponent(body)}`;
+}
+
 function Home({ user, onUser }: { user: User; onUser: (user: User | null) => void }) {
   const [profile, setProfile] = useState(user);
   const [tagName, setTagName] = useState(user.tagName);
@@ -340,8 +417,15 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const [error, setError] = useState("");
   const [showLog, setShowLog] = useState(false);
   const [showTips, setShowTips] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [periodStart, setPeriodStart] = useState(() => ensureUsePeriodStart(user.id));
+  const [dayDialog, setDayDialog] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem(onboardingKey(user.id)) !== "1");
   const [confirmOpen, setConfirmOpen] = useState(
-    () => !isRangeConfirmed(user.id, user.storageLowF, user.storageHighF),
+    () =>
+      localStorage.getItem(onboardingKey(user.id)) === "1" &&
+      Boolean(user.deviceId) &&
+      !isRangeConfirmed(user.id, user.storageLowF, user.storageHighF),
   );
   const rangeConfirmed = isRangeConfirmed(profile.id, profile.storageLowF, profile.storageHighF);
   const [alert, setAlert] = useState<FiredAlert | null>(null);
@@ -351,6 +435,11 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const rangeConfirmedRef = useRef(rangeConfirmed);
   profileRef.current = profile;
   rangeConfirmedRef.current = rangeConfirmed;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const open = loadOpenAlert(profile.id, profile.deviceId);
@@ -496,6 +585,9 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
       setAlert(null);
       setProfile(result.user);
       onUser(result.user);
+      if (!isRangeConfirmed(result.user.id, result.user.storageLowF, result.user.storageHighF)) {
+        setConfirmOpen(true);
+      }
       setStatus("");
     } catch (caught) {
       setStatus("");
@@ -506,7 +598,7 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   if (showLog) {
     return (
       <>
-        <Log profile={profile} onClose={() => setShowLog(false)} />
+        <Log profile={profile} latestMillis={reading?.timestampMillis ?? 0} onClose={() => setShowLog(false)} />
         {alert && <TempAlert alert={alert} onOk={acknowledgeAlert} />}
       </>
     );
@@ -539,11 +631,14 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const temperature = telemetry
     ? profile.useCelsius
       ? `Temperature ${telemetry.temperatureCelsius.toFixed(1)}°C`
-      : `Temperature ${telemetry.temperatureFahrenheit.toFixed(0)}°F`
+      : `Temperature ${telemetry.temperatureFahrenheit.toFixed(1)}°F`
     : "Temperature —";
+  const stale = Boolean(reading?.timestampMillis && now - reading.timestampMillis >= STALE_READING_MS);
   const updated = reading?.timestampMillis
-    ? `Last recorded update: ${new Date(reading.timestampMillis).toLocaleString()}`
-    : "Last recorded update: —";
+    ? `Last reading: ${formatReadingStamp(reading.timestampMillis)} (${formatReadingAge(reading.timestampMillis, now)})`
+    : "";
+  const useDay = dayOfUsePeriod(periodStart, now);
+  const pastUseLimit = useDay > USE_PERIOD_DAYS;
 
   return (
     <Shell>
@@ -562,23 +657,22 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
       </label>
       <label className="field-row">
         <span>Medication name:</span>
-        <select
+        <input
+          list="medications"
+          placeholder="Type or choose"
           value={profile.medicationName}
-          onChange={(event) => {
-            const next = { ...profile, medicationName: event.target.value };
-            setProfile(next);
-            persist(next).catch((caught) =>
+          onChange={(event) => setProfile({ ...profile, medicationName: event.target.value })}
+          onBlur={() => {
+            persist(profile).catch((caught) =>
               setError(caught instanceof Error ? caught.message : "Could not save"),
             );
           }}
-        >
-          <option value="">Select</option>
+        />
+        <datalist id="medications">
           {MEDICATIONS.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
+            <option key={name} value={name} />
           ))}
-        </select>
+        </datalist>
       </label>
       <div className="field-row">
         <span>Storage temperature:</span>
@@ -627,7 +721,18 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
       <section className="reading-card">
         <p>Hi {profile.preferredName},</p>
         <p>BlueOrbit Tag #: {profile.deviceName || profile.tagName || "—"}</p>
-        <p>{updated}</p>
+        {useDay > 0 && (
+          <button
+            className={pastUseLimit ? "day-count day-over" : "day-count"}
+            type="button"
+            onClick={() => setDayDialog(true)}
+          >
+            {pastUseLimit
+              ? `Day ${useDay} – past the ${USE_PERIOD_DAYS}-day limit`
+              : `Day ${useDay} of ${USE_PERIOD_DAYS}`}
+          </button>
+        )}
+        {updated && <p className={stale ? "stale" : undefined}>{updated}</p>}
         <p className="strong">{temperature}</p>
         {telemetry?.humidityPercent != null && (
           <p className="strong">Humidity: {telemetry.humidityPercent.toFixed(1)}%</p>
@@ -636,7 +741,8 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
           Battery: {telemetry ? `${telemetry.batteryPercentage.toFixed(0)}%` : "—"}
         </p>
       </section>
-      {!rangeConfirmed && (
+      {stale && <p className="status">This reading is old. It does not tell you the current temperature.</p>}
+      {profile.deviceId && !rangeConfirmed && (
         <p className="status">Temperature alerts are off until you confirm your storage range.</p>
       )}
       <div className="log-row">
@@ -658,10 +764,61 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
         </button>
       </div>
       <Brand />
+      <p className="disclaimer">
+        Development preview — not commercially available. This app is under active development and has not been
+        validated. Do not rely on it for medication storage or treatment decisions.
+      </p>
+      <p className="version">Version {APP_VERSION}</p>
+      <a className="text-btn" href={feedbackHref(profile.deviceName || profile.tagName)}>
+        Send feedback
+      </a>
       <button className="text-btn" type="button" onClick={() => api.logout().finally(() => onUser(null))}>
         Sign out
       </button>
       {alert && <TempAlert alert={alert} onOk={acknowledgeAlert} />}
+      {onboardingOpen && (
+        <div className="alert-backdrop" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+          <div className="alert-card">
+            <h2 id="onboarding-title">How MedsTemp works</h2>
+            <p>{`Your BlueOrbit tag measures the temperature where your medication is stored.\n\nYour phone picks up those readings and sends them to this app, so keep the app installed and let it run in the background.\n\nTo get started:\n\n1. Enter the storage temperature range from your product label.\n2. Scan the QR code on the back of your tag.\n\nReadings can take a minute or two to appear the first time.`}</p>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem(onboardingKey(profile.id), "1");
+                setOnboardingOpen(false);
+                if (profile.deviceId && !isRangeConfirmed(profile.id, profile.storageLowF, profile.storageHighF)) {
+                  setConfirmOpen(true);
+                }
+              }}
+            >
+              Get started
+            </button>
+          </div>
+        </div>
+      )}
+      {dayDialog && (
+        <div className="alert-backdrop" role="dialog" aria-modal="true" aria-labelledby="day-title">
+          <div className="alert-card">
+            <h2 id="day-title">Days since first use</h2>
+            <p>{`Counting from ${formatUseDate(periodStart)}.\n\nAn opened package is usually good for ${USE_PERIOD_DAYS} days, however large the supply was. Start a new period when you open a new one.`}</p>
+            <button
+              type="button"
+              onClick={() => {
+                const now = Date.now();
+                localStorage.setItem(usePeriodKey(profile.id), String(now));
+                setPeriodStart(now);
+                setDayDialog(false);
+                setStatus("Counting again from today.");
+              }}
+            >
+              Start a new period
+            </button>
+            <button className="alert-secondary" type="button" onClick={() => setDayDialog(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       {confirmOpen && (
         <RangeConfirm
           lowF={profile.storageLowF}
@@ -773,7 +930,15 @@ function TempAlert({ alert, onOk }: { alert: FiredAlert; onOk: () => void }) {
   );
 }
 
-function Log({ profile, onClose }: { profile: User; onClose: () => void }) {
+function Log({
+  profile,
+  latestMillis,
+  onClose,
+}: {
+  profile: User;
+  latestMillis: number;
+  onClose: () => void;
+}) {
   const [points, setPoints] = useState<HistoryPoint[] | null>(null);
   const [error, setError] = useState("");
   const [chart, setChart] = useState(false);
@@ -831,8 +996,11 @@ function Log({ profile, onClose }: { profile: User; onClose: () => void }) {
         {points == null && <p className="log-empty">Loading the last 7 days of readings…</p>}
         {points?.length === 0 && !error && (
           <p className="log-empty">
-            No out-of-range readings recorded. Your medication has stayed within your set range, so there is nothing
-            to chart yet.
+            {latestMillis <= 0
+              ? "This tag has not reported any readings yet.\n\nOnce it does, any reading outside your set range will appear here."
+              : Date.now() - latestMillis >= STALE_READING_MS
+                ? `No readings from this tag in ${formatReadingAge(latestMillis, Date.now())}.\n\nThe tag may be out of range of a gateway, or its battery may be flat. Recording resumes automatically when it reports again.`
+                : "No out-of-range readings recorded.\n\nYour medication has stayed within your set range, so there is nothing to chart yet."}
           </p>
         )}
         {points && points.length > 0 && chart && (
@@ -870,7 +1038,7 @@ function Log({ profile, onClose }: { profile: User; onClose: () => void }) {
             {chart ? "Table" : "Chart"}
           </button>
           <button className="white-btn" type="button" onClick={() => void share()} disabled={!points?.length}>
-            Save
+            Share
           </button>
         </div>
       </div>

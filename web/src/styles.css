@@ -152,6 +152,24 @@ select {
   font-size: 15px;
 }
 
+.reading-card .stale,
+.day-over {
+  color: #8a5800;
+}
+
+.day-count {
+  display: block;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #000;
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
 .reading-card .strong {
   margin-top: 8px;
   font-size: 18px;
@@ -194,12 +212,23 @@ select {
 }
 
 .text-btn {
+  display: inline-block;
   margin-top: 8px;
   border: 0;
   background: transparent;
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   font-size: 14px;
+  text-decoration: none;
+}
+
+.disclaimer,
+.version {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .auth-links {
@@ -296,6 +325,7 @@ select {
   margin-top: 24px;
   text-align: center;
   color: rgba(255, 255, 255, 0.6);
+  white-space: pre-line;
 }
 
 .alert-backdrop {
