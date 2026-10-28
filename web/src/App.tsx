@@ -75,16 +75,6 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function Brand() {
-  return (
-    <>
-      <div className="spacer" />
-      <img className="logo" src="logo_blueorbit.png" alt="" />
-      <p className="wordmark">BlueOrbit</p>
-    </>
-  );
-}
-
 function Auth({
   entry,
   onUser,
@@ -189,7 +179,7 @@ function Auth({
 
   return (
     <Shell>
-      <h1 className="welcome">Welcome to MedsTemp</h1>
+      <h1 className="welcome">MedsTemp by BlueOrbit</h1>
       <form className="stack" onSubmit={submit}>
         {mode === "sent" && (
           <>
@@ -325,7 +315,6 @@ function Auth({
         )}
         {error && <p className="status error">{error}</p>}
       </form>
-      <Brand />
     </Shell>
   );
 }
@@ -390,21 +379,6 @@ function formatReadingStamp(timestamp: number): string {
 
 function formatUseDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function feedbackHref(tag: string): string {
-  const body = [
-    "Tell us what happened, and what you expected instead:",
-    "",
-    "",
-    "",
-    "———",
-    "The details below help us investigate. Please leave them in place.",
-    `App version: ${APP_VERSION}`,
-    `Browser: ${navigator.userAgent}`,
-    `Tag: ${tag || "-"}`,
-  ].join("\n");
-  return `mailto:apps@blueorbit.com?subject=${encodeURIComponent(`MedsTemp feedback — version ${APP_VERSION}`)}&body=${encodeURIComponent(body)}`;
 }
 
 function Home({ user, onUser }: { user: User; onUser: (user: User | null) => void }) {
@@ -642,7 +616,7 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
 
   return (
     <Shell>
-      <h1 className="welcome">Welcome to MedsTemp</h1>
+      <h1 className="welcome">MedsTemp by BlueOrbit</h1>
       <label className="field-row">
         <span>Preferred name:</span>
         <input
@@ -763,15 +737,11 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
           Tips
         </button>
       </div>
-      <Brand />
       <p className="disclaimer">
         Development preview — not commercially available. This app is under active development and has not been
         validated. Do not rely on it for medication storage or treatment decisions.
       </p>
       <p className="version">Version {APP_VERSION}</p>
-      <a className="text-btn" href={feedbackHref(profile.deviceName || profile.tagName)}>
-        Send feedback
-      </a>
       <button className="text-btn" type="button" onClick={() => api.logout().finally(() => onUser(null))}>
         Sign out
       </button>

@@ -47,9 +47,10 @@ select {
 .welcome {
   margin: 8px 0 20px;
   text-align: center;
-  font-size: 32px;
+  font-size: clamp(18px, 4.2vw, 22px);
   font-weight: 700;
   line-height: 1.15;
+  white-space: nowrap;
 }
 
 .field-row {
@@ -189,26 +190,6 @@ select {
 
 .log-row .white-btn {
   flex: 1;
-}
-
-.spacer {
-  flex: 1;
-  min-height: 16px;
-}
-
-.logo {
-  display: block;
-  width: 220px;
-  height: 170px;
-  margin: 0 auto;
-  object-fit: contain;
-}
-
-.wordmark {
-  margin: 0;
-  text-align: center;
-  font-size: 40px;
-  font-weight: 700;
 }
 
 .text-btn {
