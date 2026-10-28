@@ -381,6 +381,22 @@ function formatUseDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function formatLogStamp(timestamp: number): string {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function logFileName(tag: string): string {
+  const stamp = formatLogStamp(Date.now()).replace(/[: ]/g, "-");
+  const safe = (tag || "readings").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "readings";
+  return `medstemp-log-${safe}-${stamp}.txt`;
+}
+
 function Home({ user, onUser }: { user: User; onUser: (user: User | null) => void }) {
   const [profile, setProfile] = useState(user);
   const [tagName, setTagName] = useState(user.tagName);
@@ -925,28 +941,75 @@ function Log({
 
   const tag = profile.deviceName || profile.tagName;
 
-  async function share() {
-    const text = [
-      `MedsTemp readings — ${tag}`,
-      ...(points ?? []).map((point) => {
-        const temp = profile.useCelsius
-          ? `${(((point.temperatureFahrenheit - 32) * 5) / 9).toFixed(1)}°C`
-          : `${point.temperatureFahrenheit.toFixed(1)}°F`;
-        const humidity = point.humidityPercent == null ? "" : ` ${point.humidityPercent.toFixed(1)}%`;
-        return `${new Date(point.timestampMillis).toLocaleString()} ${temp}${humidity} ${point.level}`;
-      }),
-    ].join("\n");
-    if (navigator.share) {
-      await navigator.share({ title: "Share readings", text }).catch(() => undefined);
-      return;
+  function logText(): string {
+    const header = ["Time", "Temperature", "Humidity %", "Status"];
+    const rows = (points ?? []).map((point) => {
+      const temp = profile.useCelsius
+        ? `${(((point.temperatureFahrenheit - 32) * 5) / 9).toFixed(1)}°C`
+        : `${point.temperatureFahrenheit.toFixed(1)}°F`;
+      const humidity = point.humidityPercent == null ? "" : point.humidityPercent.toFixed(1);
+      return [formatLogStamp(point.timestampMillis), temp, humidity, point.level].join(",");
+    });
+    return [`MedsTemp readings — ${tag}`, header.join(","), ...rows].join("\r\n") + "\r\n";
+  }
+
+  async function saveLog() {
+    if (!points?.length) return;
+    const text = logText();
+    const filename = logFileName(tag);
+    const picker = window as Window & {
+      showSaveFilePicker?: (options: {
+        suggestedName: string;
+        types: { description: string; accept: Record<string, string[]> }[];
+      }) => Promise<{
+        createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
+      }>;
+    };
+    if (typeof picker.showSaveFilePicker === "function") {
+      try {
+        const handle = await picker.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: "Text file", accept: { "text/plain": [".txt"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(new Blob([text], { type: "text/plain;charset=utf-8" }));
+        await writable.close();
+        return;
+      } catch (caught) {
+        if (caught instanceof DOMException && caught.name === "AbortError") return;
+      }
     }
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = "medstemp-readings.txt";
+    link.download = filename;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function shareLog() {
+    if (!points?.length) return;
+    const text = logText();
+    const file = new File([text], logFileName(tag), { type: "text/plain" });
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ title: "Share readings", text, files: [file] });
+        return;
+      }
+      if (navigator.share) {
+        await navigator.share({ title: "Share readings", text });
+        return;
+      }
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt("Copy these readings", text);
+    }
   }
 
   return (
@@ -1007,7 +1070,10 @@ function Log({
           <button className="white-btn" type="button" onClick={() => setChart((value) => !value)} disabled={!points?.length}>
             {chart ? "Table" : "Chart"}
           </button>
-          <button className="white-btn" type="button" onClick={() => void share()} disabled={!points?.length}>
+          <button className="white-btn" type="button" onClick={() => void saveLog()} disabled={!points?.length}>
+            Save
+          </button>
+          <button className="white-btn" type="button" onClick={() => void shareLog()} disabled={!points?.length}>
             Share
           </button>
         </div>

@@ -256,21 +256,19 @@ select {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding-bottom: 72px;
+  padding-bottom: 12px;
 }
 
 .log-actions {
-  position: absolute;
-  left: 20px;
-  right: 20px;
-  bottom: 16px;
-  z-index: 2;
+  flex-shrink: 0;
   display: flex;
   gap: 8px;
+  padding-top: 8px;
 }
 
 .log-actions .white-btn {
   flex: 1;
+  min-width: 0;
   background: #111;
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.45);
