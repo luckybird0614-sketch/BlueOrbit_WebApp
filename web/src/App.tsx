@@ -395,10 +395,10 @@ function isIos(): boolean {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
-function logFileName(tag: string): string {
+function logFileName(tag: string, extension: "txt" | "csv" = "txt"): string {
   const stamp = formatLogStamp(Date.now()).replace(/[: ]/g, "-");
   const safe = (tag || "readings").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "readings";
-  return `medstemp-log-${safe}-${stamp}.txt`;
+  return `medstemp-log-${safe}-${stamp}.${extension}`;
 }
 
 function Home({ user, onUser }: { user: User; onUser: (user: User | null) => void }) {
@@ -920,6 +920,28 @@ function TempAlert({ alert, onOk }: { alert: FiredAlert; onOk: () => void }) {
   );
 }
 
+function LogLoading() {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const started = Date.now();
+    const timer = window.setInterval(() => setElapsed(Date.now() - started), 100);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const percent = Math.round(95 * (1 - Math.exp(-elapsed / 4000)));
+
+  return (
+    <div className="log-loading" role="status" aria-live="polite">
+      <p className="log-empty">Loading the last 7 days of readings…</p>
+      <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className="progress-fill" style={{ width: `${percent}%` }} />
+      </div>
+      <p className="progress-label">{percent}%</p>
+    </div>
+  );
+}
+
 function Log({
   profile,
   latestMillis,
@@ -964,10 +986,23 @@ function Log({
     return [`MedsTemp readings — ${tag}`, "", line(header), ...rows.map(line)].join("\r\n") + "\r\n";
   }
 
+  function logCsv(): string {
+    const unit = profile.useCelsius ? "°C" : "°F";
+    const header = ["Time", `Temperature (${unit})`, "Humidity (%)", "Status"];
+    const rows = (points ?? []).map((point) => [
+      formatLogStamp(point.timestampMillis),
+      (profile.useCelsius ? ((point.temperatureFahrenheit - 32) * 5) / 9 : point.temperatureFahrenheit).toFixed(1),
+      point.humidityPercent == null ? "" : point.humidityPercent.toFixed(1),
+      point.level,
+    ]);
+    const cell = (value: string) => (/[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
+    return "\uFEFF" + [header, ...rows].map((row) => row.map(cell).join(",")).join("\r\n") + "\r\n";
+  }
+
   async function saveLog() {
     if (!points?.length) return;
-    const text = logText();
-    const filename = logFileName(tag);
+    const text = logCsv();
+    const filename = logFileName(tag, "csv");
     const picker = window as Window & {
       showSaveFilePicker?: (options: {
         suggestedName: string;
@@ -980,10 +1015,10 @@ function Log({
       try {
         const handle = await picker.showSaveFilePicker({
           suggestedName: filename,
-          types: [{ description: "Text file", accept: { "text/plain": [".txt"] } }],
+          types: [{ description: "CSV file", accept: { "text/csv": [".csv"] } }],
         });
         const writable = await handle.createWritable();
-        await writable.write(new Blob([text], { type: "text/plain;charset=utf-8" }));
+        await writable.write(new Blob([text], { type: "text/csv;charset=utf-8" }));
         await writable.close();
         return;
       } catch (caught) {
@@ -991,7 +1026,7 @@ function Log({
       }
     }
     if (isIos()) {
-      const file = new File([text], filename, { type: "text/plain" });
+      const file = new File([text], filename, { type: "text/csv" });
       if (navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file] });
@@ -1001,7 +1036,7 @@ function Log({
         }
       }
     }
-    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = filename;
@@ -1014,10 +1049,10 @@ function Log({
   async function shareLog() {
     if (!points?.length) return;
     const text = logText();
-    const file = new File([text], logFileName(tag), { type: "text/plain" });
+    const file = new File([logCsv()], logFileName(tag, "csv"), { type: "text/csv" });
     try {
       if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ title: "Share readings", text, files: [file] });
+        await navigator.share({ title: `MedsTemp readings — ${tag}`, files: [file] });
         return;
       }
       if (navigator.share) {
@@ -1048,7 +1083,7 @@ function Log({
           Readings for tag {tag}. An entry is recorded whenever the temperature goes outside your set range.
         </p>
         {error && <p className="status error">{error}</p>}
-        {points == null && <p className="log-empty">Loading the last 7 days of readings…</p>}
+        {points == null && <LogLoading />}
         {points?.length === 0 && !error && (
           <p className="log-empty">
             {latestMillis <= 0
