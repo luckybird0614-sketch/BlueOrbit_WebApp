@@ -44,6 +44,11 @@ select {
   flex-direction: column;
 }
 
+.phone-centered {
+  justify-content: center;
+  padding-bottom: 12vh;
+}
+
 .welcome {
   margin: 8px 0 20px;
   text-align: center;

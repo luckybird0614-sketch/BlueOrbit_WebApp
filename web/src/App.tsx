@@ -67,10 +67,10 @@ export function App() {
   return <Home user={user} onUser={setUser} />;
 }
 
-function Shell({ children }: { children: ReactNode }) {
+function Shell({ children, centered = false }: { children: ReactNode; centered?: boolean }) {
   return (
     <main className="screen">
-      <div className="phone">{children}</div>
+      <div className={centered ? "phone phone-centered" : "phone"}>{children}</div>
     </main>
   );
 }
@@ -178,7 +178,7 @@ function Auth({
   }
 
   return (
-    <Shell>
+    <Shell centered>
       <h1 className="welcome">MedsTemp by BlueOrbit</h1>
       <form className="stack" onSubmit={submit}>
         {mode === "sent" && (
@@ -631,7 +631,7 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const pastUseLimit = useDay > USE_PERIOD_DAYS;
 
   return (
-    <Shell>
+    <Shell centered>
       <h1 className="welcome">MedsTemp by BlueOrbit</h1>
       <label className="field-row">
         <span>Preferred name:</span>
