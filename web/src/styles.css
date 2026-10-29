@@ -11,7 +11,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: #000 url("/bg_home_milky_way.png") center / cover no-repeat fixed;
+  background: #000 url("/bg_home_milky_way.png") center / 100% 100% no-repeat fixed;
 }
 
 button,
