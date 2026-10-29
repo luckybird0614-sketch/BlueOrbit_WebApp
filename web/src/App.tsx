@@ -391,6 +391,10 @@ function formatLogStamp(timestamp: number): string {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
+function isIos(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 function logFileName(tag: string): string {
   const stamp = formatLogStamp(Date.now()).replace(/[: ]/g, "-");
   const safe = (tag || "readings").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") || "readings";
@@ -942,15 +946,22 @@ function Log({
   const tag = profile.deviceName || profile.tagName;
 
   function logText(): string {
-    const header = ["Time", "Temperature", "Humidity %", "Status"];
+    const header = ["Time", "Temperature", "Humidity", "Status"];
     const rows = (points ?? []).map((point) => {
       const temp = profile.useCelsius
-        ? `${(((point.temperatureFahrenheit - 32) * 5) / 9).toFixed(1)}°C`
-        : `${point.temperatureFahrenheit.toFixed(1)}°F`;
-      const humidity = point.humidityPercent == null ? "" : point.humidityPercent.toFixed(1);
-      return [formatLogStamp(point.timestampMillis), temp, humidity, point.level].join(",");
+        ? `${(((point.temperatureFahrenheit - 32) * 5) / 9).toFixed(1)} °C`
+        : `${point.temperatureFahrenheit.toFixed(1)} °F`;
+      const humidity = point.humidityPercent == null ? "—" : `${point.humidityPercent.toFixed(1)}%`;
+      return [formatLogStamp(point.timestampMillis), temp, humidity, point.level];
     });
-    return [`MedsTemp readings — ${tag}`, header.join(","), ...rows].join("\r\n") + "\r\n";
+    const widths = header.map((title, column) =>
+      Math.max(title.length, ...rows.map((row) => row[column].length)),
+    );
+    const line = (cells: string[]) =>
+      cells
+        .map((cell, column) => (column === cells.length - 1 ? cell : cell.padEnd(widths[column])))
+        .join("   ");
+    return [`MedsTemp readings — ${tag}`, "", line(header), ...rows.map(line)].join("\r\n") + "\r\n";
   }
 
   async function saveLog() {
@@ -979,6 +990,17 @@ function Log({
         if (caught instanceof DOMException && caught.name === "AbortError") return;
       }
     }
+    if (isIos()) {
+      const file = new File([text], filename, { type: "text/plain" });
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          return;
+        } catch (caught) {
+          if (caught instanceof DOMException && caught.name === "AbortError") return;
+        }
+      }
+    }
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
@@ -986,7 +1008,7 @@ function Log({
     document.body.appendChild(link);
     link.click();
     link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   async function shareLog() {
