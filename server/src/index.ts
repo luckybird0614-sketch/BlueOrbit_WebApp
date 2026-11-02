@@ -143,11 +143,13 @@ app.post("/api/auth/forgot", async (req, res, next) => {
     if (user && !emailOnCooldown(`reset:${email}`)) {
       try {
         const token = await issueToken(Number(user.id), "reset");
-        await sendMail(
-          email,
-          "Reset your MedsTemp password",
-          `Open this link to choose a new password. It expires in 1 hour.\n\n${appUrl()}/?reset=${token}\n\nIf you did not ask for this, you can ignore this email.`,
-        );
+        await sendMail(email, "Reset your MedsTemp password", {
+          heading: "Reset your password",
+          intro: "We received a request to reset the password for your MedsTemp account. This link expires in 1 hour.",
+          actionLabel: "Choose a new password",
+          actionUrl: `${appUrl()}/?reset=${token}`,
+          footer: "If you did not ask for this, you can ignore this email. Your password stays the same.",
+        });
         markEmailSent(`reset:${email}`);
       } catch {
         res.status(503).json({ error: "Could not send the reset email" });
@@ -449,11 +451,13 @@ async function consumeToken(token: string, purpose: "verify" | "reset"): Promise
 
 async function sendVerificationEmail(userId: number, email: string): Promise<void> {
   const token = await issueToken(userId, "verify");
-  await sendMail(
-    email,
-    "Verify your MedsTemp email",
-    `Open this link to finish creating your account. It expires in 24 hours.\n\n${appUrl()}/?verify=${token}\n\nIf you did not create an account, you can ignore this email.`,
-  );
+  await sendMail(email, "Verify your MedsTemp email", {
+    heading: "Confirm your email address",
+    intro: "Thanks for signing up for MedsTemp. Confirm your email address to finish creating your account. This link expires in 24 hours.",
+    actionLabel: "Verify email",
+    actionUrl: `${appUrl()}/?verify=${token}`,
+    footer: "If you did not create a MedsTemp account, you can ignore this email.",
+  });
   markEmailSent(`verify:${email}`);
 }
 
