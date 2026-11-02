@@ -6,8 +6,47 @@ export function mailConfigured(): boolean {
   return Boolean(process.env.SMTP_FROM?.trim() && process.env.SMTP_USER?.trim() && process.env.SMTP_PASSWORD?.trim());
 }
 
-export function appUrl(): string {
-  return (process.env.APP_URL || "http://127.0.0.1:5173").trim().replace(/\/$/, "");
+const LOCAL_HOST = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/i;
+
+type RequestLike = { get(name: string): string | undefined };
+
+function firstHeader(value: string | undefined): string {
+  return (value ?? "").split(",")[0].trim();
+}
+
+function requestOrigin(req: RequestLike): string | null {
+  const origin = firstHeader(req.get("origin"));
+  if (!origin) {
+    return null;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return null;
+  }
+  const host = firstHeader(req.get("x-forwarded-host")) || firstHeader(req.get("host"));
+  if (!host || parsed.host.toLowerCase() !== host.toLowerCase() || LOCAL_HOST.test(parsed.host)) {
+    return null;
+  }
+  return parsed.origin;
+}
+
+export function appUrl(req?: RequestLike): string {
+  const configured = (process.env.APP_URL || "").trim().replace(/\/$/, "");
+  let configuredIsLocal = !configured;
+  if (configured) {
+    try {
+      configuredIsLocal = LOCAL_HOST.test(new URL(configured).host);
+    } catch {
+      configuredIsLocal = true;
+    }
+  }
+  if (configured && !configuredIsLocal) {
+    return configured;
+  }
+  const fromRequest = req ? requestOrigin(req) : null;
+  return fromRequest ?? (configured || "http://127.0.0.1:5173");
 }
 
 function fromAddress(): string {

@@ -52,7 +52,7 @@ app.post("/api/auth/register", async (req, res) => {
   const userId = created.insertId;
   await run("INSERT INTO profiles (user_id, preferred_name) VALUES (?, ?)", [userId, preferredName]);
   try {
-    await sendVerificationEmail(userId, email);
+    await sendVerificationEmail(userId, email, appUrl(req));
   } catch {
     await run("DELETE FROM users WHERE id = ?", [userId]);
     res.status(503).json({ error: "Could not send the verification email" });
@@ -115,7 +115,7 @@ app.post("/api/auth/resend", async (req, res, next) => {
     );
     if (user && !user.email_verified_at) {
       try {
-        await sendVerificationEmail(Number(user.id), email);
+        await sendVerificationEmail(Number(user.id), email, appUrl(req));
       } catch {
         res.status(503).json({ error: "Could not send the verification email" });
         return;
@@ -147,7 +147,7 @@ app.post("/api/auth/forgot", async (req, res, next) => {
           heading: "Reset your password",
           intro: "We received a request to reset the password for your MedsTemp account. This link expires in 1 hour.",
           actionLabel: "Choose a new password",
-          actionUrl: `${appUrl()}/?reset=${token}`,
+          actionUrl: `${appUrl(req)}/?reset=${token}`,
           footer: "If you did not ask for this, you can ignore this email. Your password stays the same.",
         });
         markEmailSent(`reset:${email}`);
@@ -449,13 +449,13 @@ async function consumeToken(token: string, purpose: "verify" | "reset"): Promise
   return Number(row.user_id);
 }
 
-async function sendVerificationEmail(userId: number, email: string): Promise<void> {
+async function sendVerificationEmail(userId: number, email: string, baseUrl: string): Promise<void> {
   const token = await issueToken(userId, "verify");
   await sendMail(email, "Verify your MedsTemp email", {
     heading: "Confirm your email address",
     intro: "Thanks for signing up for MedsTemp. Confirm your email address to finish creating your account. This link expires in 24 hours.",
     actionLabel: "Verify email",
-    actionUrl: `${appUrl()}/?verify=${token}`,
+    actionUrl: `${baseUrl}/?verify=${token}`,
     footer: "If you did not create a MedsTemp account, you can ignore this email.",
   });
   markEmailSent(`verify:${email}`);
