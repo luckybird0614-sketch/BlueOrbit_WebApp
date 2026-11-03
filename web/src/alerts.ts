@@ -183,6 +183,36 @@ export function evaluateReading(
   return { state: next, alert: null };
 }
 
+export function primeAlertState(
+  state: AlertState,
+  reading: {
+    deviceId: string;
+    temperatureFahrenheit: number;
+    storageLowF: number;
+    storageHighF: number;
+    rangeConfirmed: boolean;
+  },
+  now: number,
+): AlertState {
+  const next: AlertState =
+    state.deviceId === reading.deviceId ? { ...state } : emptyAlertState(reading.deviceId);
+  if (!Number.isFinite(reading.temperatureFahrenheit)) {
+    return next;
+  }
+  next.basicTempF = reading.temperatureFahrenheit;
+  const outside =
+    reading.rangeConfirmed &&
+    !isWithinRange(reading.temperatureFahrenheit, reading.storageLowF, reading.storageHighF);
+  if (outside && !next.outsideAlertFired) {
+    next.outsideAlertFired = true;
+    next.lastExcursionAlertAt = now;
+  } else if (!outside) {
+    next.outsideAlertFired = false;
+    next.lastExcursionAlertAt = 0;
+  }
+  return next;
+}
+
 export function dismissAlert(state: AlertState, now: number): AlertState {
   return { ...state, nextCheckAt: now + TEMP_ALERT_COOLDOWN_MS };
 }

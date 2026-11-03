@@ -6,7 +6,7 @@ import {
   formatRange,
   isRangeConfirmed,
   loadAlertState,
-  loadOpenAlert,
+  primeAlertState,
   resetAlertState,
   saveAlertState,
   saveOpenAlert,
@@ -425,6 +425,7 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const [alert, setAlert] = useState<FiredAlert | null>(null);
   const alertStateRef = useRef<AlertState>(loadAlertState(profile.id, profile.deviceId));
   const alertOpenRef = useRef(false);
+  const openingReadingRef = useRef(true);
   const profileRef = useRef(profile);
   const rangeConfirmedRef = useRef(rangeConfirmed);
   profileRef.current = profile;
@@ -436,10 +437,11 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   }, []);
 
   useEffect(() => {
-    const open = loadOpenAlert(profile.id, profile.deviceId);
+    saveOpenAlert(profile.id, null);
     alertStateRef.current = loadAlertState(profile.id, profile.deviceId);
-    alertOpenRef.current = open != null;
-    setAlert(open);
+    alertOpenRef.current = false;
+    openingReadingRef.current = true;
+    setAlert(null);
   }, [profile.id, profile.deviceId]);
 
   useEffect(() => {
@@ -492,6 +494,22 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
             return;
           }
           const currentProfile = profileRef.current;
+          if (openingReadingRef.current) {
+            openingReadingRef.current = false;
+            alertStateRef.current = primeAlertState(
+              alertStateRef.current,
+              {
+                deviceId: currentProfile.deviceId,
+                temperatureFahrenheit: telemetry.temperatureFahrenheit,
+                storageLowF: currentProfile.storageLowF,
+                storageHighF: currentProfile.storageHighF,
+                rangeConfirmed: rangeConfirmedRef.current,
+              },
+              Date.now(),
+            );
+            saveAlertState(currentProfile.id, alertStateRef.current);
+            return;
+          }
           const result = evaluateReading(
             alertStateRef.current,
             {
