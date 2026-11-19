@@ -145,6 +145,25 @@ select {
   font-size: 15px;
 }
 
+.reading-layout {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.reading-layout .thermometer {
+  width: 152px;
+  margin: 0;
+  flex: none;
+}
+
+.reading-layout .reading-card {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+
 .reading-card {
   margin-top: 14px;
   padding: 14px;
@@ -543,4 +562,67 @@ select {
   background: #111;
   color: #fff;
   cursor: pointer;
+}
+
+.unit-tag {
+  width: 48px;
+  flex: none;
+  text-align: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.thermometer {
+  position: relative;
+  width: min(100%, 300px);
+  margin: 18px auto 0;
+  aspect-ratio: 613 / 1024;
+}
+
+.thermo-media,
+.thermo-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.thermo-media {
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.thermo-svg {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.thermo-tick,
+.thermo-safe,
+.thermo-unit {
+  font-family: "Segoe UI", Roboto, sans-serif;
+  font-size: 48px;
+  font-weight: 700;
+  stroke: #000;
+  stroke-width: 4px;
+  paint-order: stroke;
+  dominant-baseline: central;
+}
+
+.thermo-tick,
+.thermo-unit {
+  fill: #fff;
+}
+
+.thermo-safe {
+  fill: #b8ff6a;
+}
+
+.thermo-c {
+  text-anchor: end;
+}
+
+.thermo-f {
+  text-anchor: start;
 }

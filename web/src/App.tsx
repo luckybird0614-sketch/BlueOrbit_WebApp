@@ -15,6 +15,7 @@ import {
 } from "./alerts";
 import { api, type HistoryPoint, type Reading, type User } from "./api";
 import { MEDICATIONS } from "./medications";
+import { Thermometer } from "./Thermometer";
 
 function readAuthLink(): { verify: string | null; reset: string | null } {
   const params = new URLSearchParams(window.location.search);
@@ -332,6 +333,25 @@ function onboardingKey(userId: number): string {
   return `bo-onboarding:${userId}`;
 }
 
+function scaleKey(userId: number): string {
+  return `bo-thermo-scale:${userId}`;
+}
+
+function loadScale(userId: number): { minC: number; maxC: number } {
+  try {
+    const raw = localStorage.getItem(scaleKey(userId));
+    if (raw) {
+      const saved = JSON.parse(raw) as { minC?: number; maxC?: number };
+      if (Number.isFinite(saved.minC) && Number.isFinite(saved.maxC) && (saved.minC as number) < (saved.maxC as number)) {
+        return { minC: saved.minC as number, maxC: saved.maxC as number };
+      }
+    }
+  } catch {
+    /* keep the default scale */
+  }
+  return { minC: 0, maxC: 25 };
+}
+
 function ensureUsePeriodStart(userId: number): number {
   const existing = Number(localStorage.getItem(usePeriodKey(userId)));
   if (existing > 0) {
@@ -406,6 +426,11 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const [tagName, setTagName] = useState(user.tagName);
   const [lowText, setLowText] = useState(formatStorage(user.storageLowF, user.useCelsius));
   const [highText, setHighText] = useState(formatStorage(user.storageHighF, user.useCelsius));
+  const initialScale = loadScale(user.id);
+  const [scaleMinC, setScaleMinC] = useState(initialScale.minC);
+  const [scaleMaxC, setScaleMaxC] = useState(initialScale.maxC);
+  const [scaleMinText, setScaleMinText] = useState(formatDisplayTemp(initialScale.minC, user.useCelsius));
+  const [scaleMaxText, setScaleMaxText] = useState(formatDisplayTemp(initialScale.maxC, user.useCelsius));
   const [reading, setReading] = useState<Reading | null>(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -575,12 +600,34 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
     setError("");
   }
 
+  function commitScale() {
+    const minC = parseDisplayTemp(scaleMinText, profile.useCelsius);
+    const maxC = parseDisplayTemp(scaleMaxText, profile.useCelsius);
+    if (!Number.isFinite(minC) || !Number.isFinite(maxC) || !(minC < maxC)) {
+      setError("Extreme minimum must be smaller than maximum");
+      setScaleMinText(formatDisplayTemp(scaleMinC, profile.useCelsius));
+      setScaleMaxText(formatDisplayTemp(scaleMaxC, profile.useCelsius));
+      return false;
+    }
+    setScaleMinC(minC);
+    setScaleMaxC(maxC);
+    setScaleMinText(formatDisplayTemp(minC, profile.useCelsius));
+    setScaleMaxText(formatDisplayTemp(maxC, profile.useCelsius));
+    localStorage.setItem(scaleKey(profile.id), JSON.stringify({ minC, maxC }));
+    setError("");
+    return true;
+  }
+
   function toggleUnit() {
     const useCelsius = !profile.useCelsius;
     const lowF = toFahrenheit(Number(lowText), profile.useCelsius);
     const highF = toFahrenheit(Number(highText), profile.useCelsius);
     setLowText(formatStorage(lowF, useCelsius));
     setHighText(formatStorage(highF, useCelsius));
+    const minC = parseDisplayTemp(scaleMinText, profile.useCelsius);
+    const maxC = parseDisplayTemp(scaleMaxText, profile.useCelsius);
+    setScaleMinText(formatDisplayTemp(Number.isFinite(minC) ? minC : scaleMinC, useCelsius));
+    setScaleMaxText(formatDisplayTemp(Number.isFinite(maxC) ? maxC : scaleMaxC, useCelsius));
     const next = { ...profile, useCelsius, storageLowF: lowF, storageHighF: highF };
     setProfile(next);
     persist(next).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not save"));
@@ -651,9 +698,14 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
     : "";
   const useDay = dayOfUsePeriod(periodStart, now);
   const pastUseLimit = useDay > USE_PERIOD_DAYS;
+  const typedMinC = parseDisplayTemp(scaleMinText, profile.useCelsius);
+  const typedMaxC = parseDisplayTemp(scaleMaxText, profile.useCelsius);
+  const scaleReady = Number.isFinite(typedMinC) && Number.isFinite(typedMaxC) && typedMinC < typedMaxC;
+  const activeMinC = scaleReady ? typedMinC : scaleMinC;
+  const activeMaxC = scaleReady ? typedMaxC : scaleMaxC;
 
   return (
-    <Shell centered>
+    <Shell>
       <h1 className="welcome">MedsTemp by BlueOrbit</h1>
       <label className="field-row">
         <span>Preferred name:</span>
@@ -720,6 +772,29 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
         </div>
       </div>
       <div className="field-row">
+        <span>Extreme temperature range:</span>
+        <div className="temp-range">
+          <input
+            aria-label="Extreme minimum"
+            inputMode="decimal"
+            value={scaleMinText}
+            onChange={(event) => setScaleMinText(event.target.value)}
+            onBlur={commitScale}
+          />
+          <span>to</span>
+          <input
+            aria-label="Extreme maximum"
+            inputMode="decimal"
+            value={scaleMaxText}
+            onChange={(event) => setScaleMaxText(event.target.value)}
+            onBlur={commitScale}
+          />
+          <button className="white-btn unit-btn" type="button" onClick={toggleUnit}>
+            {profile.useCelsius ? "°C" : "°F"}
+          </button>
+        </div>
+      </div>
+      <div className="field-row">
         <span>Tap to scan the code on the back of your tag:</span>
         <button className="white-btn" type="button" onClick={() => scanTag(setTagName, setStatus)}>
           Scan QR code
@@ -730,7 +805,16 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
         <input value={tagName} onChange={(event) => setTagName(event.target.value)} />
       </form>
       <p className={error ? "status error" : "status"}>{error || status}</p>
-      <section className="reading-card">
+      <div className="reading-layout">
+        <Thermometer
+          temperatureC={telemetry?.temperatureCelsius ?? null}
+          minC={activeMinC}
+          maxC={activeMaxC}
+          safeLowC={((profile.storageLowF - 32) * 5) / 9}
+          safeHighC={((profile.storageHighF - 32) * 5) / 9}
+          useCelsius={profile.useCelsius}
+        />
+        <section className="reading-card">
         <p>Hi {profile.preferredName},</p>
         <p>BlueOrbit Tag #: {profile.deviceName || profile.tagName || "—"}</p>
         {useDay > 0 && (
@@ -752,7 +836,8 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
         <p className="strong">
           Battery: {telemetry ? `${telemetry.batteryPercentage.toFixed(0)}%` : "—"}
         </p>
-      </section>
+        </section>
+      </div>
       {stale && <p className="status">This reading is old. It does not tell you the current temperature.</p>}
       {profile.deviceId && !rangeConfirmed && (
         <p className="status">Temperature alerts are off until you confirm your storage range.</p>
@@ -1635,6 +1720,18 @@ function formatAxisTime(timestamp: number, useDays: boolean): string {
 function formatStorage(fahrenheit: number, celsius: boolean): string {
   const value = celsius ? ((fahrenheit - 32) * 5) / 9 : fahrenheit;
   return String(Math.round(value * 10) / 10);
+}
+
+function formatDisplayTemp(celsius: number, useCelsius: boolean): string {
+  const value = useCelsius ? celsius : (celsius * 9) / 5 + 32;
+  return String(Math.round(value * 10) / 10);
+}
+
+function parseDisplayTemp(text: string, useCelsius: boolean): number {
+  const trimmed = text.trim();
+  if (!trimmed || !Number.isFinite(Number(trimmed))) return NaN;
+  const value = Number(trimmed);
+  return useCelsius ? value : ((value - 32) * 5) / 9;
 }
 
 function toFahrenheit(value: number, celsius: boolean): number {
