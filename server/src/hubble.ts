@@ -41,16 +41,37 @@ export async function deviceHistory(deviceId: string, days: number): Promise<Clo
   }
   const end = Math.floor(Date.now() / 1000);
   const start = end - days * 24 * 60 * 60;
-  return fetchDevices(start, deviceId, 80, end);
+  const { packets } = await fetchDevices(start, deviceId, 80, end);
+  return packets;
 }
 
-/** Newest packet with a payload for one device, from a closed 12-hour window. */
+/** Newest packet with a payload for one device, looking back up to 12 hours. */
 export async function latestDevicePacket(deviceId: string): Promise<CloudDevice | null> {
   if (!hubbleConfigured()) {
     throw new Error("Hubble org id and API token are not set in .env");
   }
   const end = Math.floor(Date.now() / 1000);
-  const packets = await fetchDevices(end - 12 * 60 * 60, deviceId, 2, end);
+  const maxSpan = 12 * 60 * 60;
+  let span = 20 * 60;
+  while (span >= 60) {
+    const { packets, truncated } = await fetchDevices(end - span, deviceId, 3, end);
+    if (truncated) {
+      span = Math.floor(span / 4);
+      continue;
+    }
+    const newest = newestPayload(packets);
+    if (newest) {
+      return newest;
+    }
+    if (span >= maxSpan) {
+      return null;
+    }
+    span = Math.min(maxSpan, span * 4);
+  }
+  return null;
+}
+
+function newestPayload(packets: CloudDevice[]): CloudDevice | null {
   for (let index = packets.length - 1; index >= 0; index -= 1) {
     if (packets[index]?.payloadBase64) {
       return packets[index] ?? null;
@@ -108,10 +129,11 @@ async function fetchDevices(
   deviceId: string | null,
   maxPages: number,
   endTimeEpochSec?: number,
-): Promise<CloudDevice[]> {
+): Promise<{ packets: CloudDevice[]; truncated: boolean }> {
   const byId = new Map<string, CloudDevice>();
   const history: CloudDevice[] = [];
   let continuation: string | null = null;
+  let truncated = false;
 
   for (let page = 0; page < maxPages; page += 1) {
     const url = orgUrl("packets");
@@ -138,12 +160,15 @@ async function fetchDevices(
     if (!continuation) {
       break;
     }
+    if (page === maxPages - 1) {
+      truncated = true;
+    }
   }
 
-  if (deviceId) {
-    return history.sort((a, b) => a.timestampMillis - b.timestampMillis);
-  }
-  return [...byId.values()].sort((a, b) => b.timestampMillis - a.timestampMillis);
+  const packets = deviceId
+    ? history.sort((a, b) => a.timestampMillis - b.timestampMillis)
+    : [...byId.values()].sort((a, b) => b.timestampMillis - a.timestampMillis);
+  return { packets, truncated };
 }
 
 function orgUrl(resource: "devices" | "packets"): URL {
@@ -203,6 +228,19 @@ function parseOrgDevices(devices: unknown[]): CloudDevice[] {
   return parsed;
 }
 
+function numericTime(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return 0;
+}
+
 function toMillis(value: number): number {
   if (!Number.isFinite(value) || value <= 0) {
     return 0;
@@ -218,14 +256,13 @@ function parsePackets(packets: unknown[]): CloudDevice[] {
     }
     const packet = raw as {
       device?: { id?: string; name?: string; rssi?: number; payload?: string; timestamp?: unknown };
-      location?: { timestamp?: number };
+      location?: { timestamp?: unknown };
     };
     const id = packet.device?.id ?? "";
     if (!id) {
       continue;
     }
-    const locationTs = packet.location?.timestamp ?? 0;
-    const timestampMillis = locationTs > 1_000_000_000_000 ? locationTs : locationTs * 1000;
+    const timestampMillis = toMillis(numericTime(packet.device?.timestamp) || numericTime(packet.location?.timestamp));
     devices.push({
       id,
       name: packet.device?.name ?? "",

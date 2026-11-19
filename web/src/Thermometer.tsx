@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-// Frames of empty_mercury_anim.gif and full_mercury_anim.gif, with the black backdrop removed.
+// Frames of the empty and full mercury GIFs, with the black backdrop removed.
 const EMPTY_FRAMES = Array.from({ length: 9 }, (_, index) => `/thermometer/empty/${String(index).padStart(2, "0")}.png`);
 const FULL_FRAMES = Array.from({ length: 9 }, (_, index) => `/thermometer/full/${String(index).padStart(2, "0")}.png`);
 

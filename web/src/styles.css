@@ -120,6 +120,12 @@ select {
   padding: 0 4px;
 }
 
+.range-mark {
+  flex: none;
+  font-weight: 700;
+  font-size: 14px;
+}
+
 .unit-btn {
   width: 48px;
   flex: none;

@@ -774,16 +774,21 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
       <div className="field-row">
         <span>Extreme temperature range:</span>
         <div className="temp-range">
+          <span className="range-mark" aria-hidden="true">
+            L
+          </span>
           <input
-            aria-label="Extreme minimum"
+            aria-label="Extreme low"
             inputMode="decimal"
             value={scaleMinText}
             onChange={(event) => setScaleMinText(event.target.value)}
             onBlur={commitScale}
           />
-          <span>to</span>
+          <span className="range-mark" aria-hidden="true">
+            H
+          </span>
           <input
-            aria-label="Extreme maximum"
+            aria-label="Extreme high"
             inputMode="decimal"
             value={scaleMaxText}
             onChange={(event) => setScaleMaxText(event.target.value)}
