@@ -741,6 +741,7 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
       <div className="field-row">
         <span>Storage temperature:</span>
         <div className="temp-range">
+          <span className="range-mark" aria-hidden="true"></span>
           <input
             inputMode="decimal"
             value={lowText}
