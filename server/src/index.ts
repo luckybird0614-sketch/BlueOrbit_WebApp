@@ -296,7 +296,7 @@ app.get("/api/tags/history", requireUser, async (req, res, next) => {
     }
     const days = Math.min(7, Math.max(1, Number(req.query.days) || 7));
     const packets = await deviceHistory(profile.device_id, days);
-    const buckets = new Map<number, { timestampMillis: number; temperatureFahrenheit: number; humidityPercent: number | null; level: "High" | "Low" }>();
+    const points: { timestampMillis: number; temperatureFahrenheit: number; humidityPercent: number | null; level: "High" | "Low" | "In range" }[] = [];
     for (const packet of packets) {
       if (!packet.payloadBase64) {
         continue;
@@ -305,24 +305,21 @@ app.get("/api/tags/history", requireUser, async (req, res, next) => {
       if (!telemetry) {
         continue;
       }
-      const bucket = Math.floor(packet.timestampMillis / (10 * 60_000)) * 10 * 60_000;
       const level =
         telemetry.temperatureFahrenheit > profile.storage_high_f
           ? "High"
           : telemetry.temperatureFahrenheit < profile.storage_low_f
             ? "Low"
-            : null;
-      if (!level) {
-        continue;
-      }
-      buckets.set(bucket, {
+            : "In range";
+      points.push({
         timestampMillis: packet.timestampMillis,
         temperatureFahrenheit: telemetry.temperatureFahrenheit,
         humidityPercent: telemetry.humidityPercent,
         level,
       });
     }
-    res.json({ points: [...buckets.values()].sort((a, b) => a.timestampMillis - b.timestampMillis) });
+    points.sort((a, b) => a.timestampMillis - b.timestampMillis);
+    res.json({ points });
   } catch (error) {
     next(error);
   }

@@ -1,18 +1,18 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 // Frames of the empty and full mercury GIFs, with the black backdrop removed.
-const EMPTY_FRAMES = Array.from({ length: 9 }, (_, index) => `/thermometer/empty/${String(index).padStart(2, "0")}.png`);
-const FULL_FRAMES = Array.from({ length: 9 }, (_, index) => `/thermometer/full/${String(index).padStart(2, "0")}.png`);
+const EMPTY_FRAMES = Array.from({ length: 12 }, (_, index) => `/thermometer/empty/${String(index).padStart(2, "0")}.png`);
+const FULL_FRAMES = Array.from({ length: 12 }, (_, index) => `/thermometer/full/${String(index).padStart(2, "0")}.png`);
 
-const IMAGE_W = 613;
+const IMAGE_W = 612;
 const IMAGE_H = 1024;
-const SCALE_TOP = 98;
-const SCALE_BOTTOM = 864;
-const TUBE_X = 281;
-const TUBE_W = 51;
+const SCALE_TOP = 103;
+const SCALE_BOTTOM = 850;
+const TUBE_X = 294;
+const TUBE_W = 25;
 const BULB_CX = 306.5;
-const BULB_CY = 932;
-const BULB_R = 50;
+const BULB_CY = 916;
+const BULB_R = 30;
 const PAINT_BOTTOM = BULB_CY + BULB_R;
 const YELLOW = "#f5c400";
 const GREEN = "#24b948";
@@ -59,8 +59,8 @@ export function Thermometer({
 
   return (
     <div className="thermometer" role="img" aria-label={label}>
-      {mode === "empty" && <MercuryFilm frames={EMPTY_FRAMES} delay={130} />}
-      {mode === "full" && <MercuryFilm frames={FULL_FRAMES} delay={160} />}
+      {mode === "empty" && <MercuryFilm frames={EMPTY_FRAMES} delay={60} />}
+      {mode === "full" && <MercuryFilm frames={FULL_FRAMES} delay={60} />}
       {mode !== "empty" && mode !== "full" && (
         <>
           <img className="thermo-media" src="/thermometer_back.png" alt="" />
@@ -163,12 +163,12 @@ function Mercury({
         <clipPath id={boreId} clipPathUnits="userSpaceOnUse">
           <circle cx={BULB_CX} cy={BULB_CY} r={BULB_R} />
           <rect x={TUBE_X} y={levelY} width={TUBE_W} height={PAINT_BOTTOM - levelY} />
-          <ellipse cx={BULB_CX} cy={levelY} rx={TUBE_W / 2} ry={12} />
+          <ellipse cx={BULB_CX} cy={levelY} rx={TUBE_W / 2} ry={8} />
         </clipPath>
       </defs>
       <g clipPath={`url(#${boreId})`}>
         <rect x="250" y={levelY - 14} width="120" height={PAINT_BOTTOM - levelY + 20} fill={color} />
-        <rect x="294" y={levelY - 8} width="7" height={PAINT_BOTTOM - levelY + 8} fill="rgba(255,255,255,0.34)" />
+        <rect x={TUBE_X + 4} y={levelY - 6} width="4" height={PAINT_BOTTOM - levelY + 6} fill="rgba(255,255,255,0.34)" />
       </g>
     </>
   );
@@ -197,20 +197,20 @@ function ScaleLabels({
 
   return (
     <g className="thermo-labels">
-      <text className="thermo-unit thermo-c" x="114" y="58">
+      <text className="thermo-unit thermo-c" x="220" y="46">
         °C
       </text>
-      <text className="thermo-unit thermo-f" x="498" y="58">
+      <text className="thermo-unit thermo-f" x="392" y="46">
         °F
       </text>
       {rows.map((mark) => {
         const tone = mark.safety ? "thermo-safe" : "thermo-tick";
         return (
           <g key={mark.celsius}>
-            <text className={`${tone} thermo-c`} x="114" y={mark.y}>
+            <text className={`${tone} thermo-c`} x="220" y={mark.y}>
               {formatNumber(mark.celsius)}°
             </text>
-            <text className={`${tone} thermo-f`} x="498" y={mark.y}>
+            <text className={`${tone} thermo-f`} x="392" y={mark.y}>
               {formatFahrenheit(mark.celsius)}°
             </text>
           </g>

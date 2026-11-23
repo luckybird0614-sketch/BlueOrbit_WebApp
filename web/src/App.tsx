@@ -436,6 +436,7 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const [error, setError] = useState("");
   const [showLog, setShowLog] = useState(false);
   const [showTips, setShowTips] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [periodStart, setPeriodStart] = useState(() => ensureUsePeriodStart(user.id));
   const [dayDialog, setDayDialog] = useState(false);
@@ -865,12 +866,10 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
         <button className="white-btn" type="button" onClick={() => setShowTips(true)}>
           Tips
         </button>
+        <button className="white-btn" type="button" onClick={() => setShowAbout(true)}>
+          About
+        </button>
       </div>
-      <p className="disclaimer">
-        Development preview — not commercially available. This app is under active development and has not been
-        validated. Do not rely on it for medication storage or treatment decisions.
-      </p>
-      <p className="version">Version {APP_VERSION}</p>
       <button className="text-btn" type="button" onClick={() => api.logout().finally(() => onUser(null))}>
         Sign out
       </button>
@@ -891,6 +890,20 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
               }}
             >
               Get started
+            </button>
+          </div>
+        </div>
+      )}
+      {showAbout && (
+        <div className="alert-backdrop" role="dialog" aria-modal="true" aria-labelledby="about-title">
+          <div className="alert-card">
+            <p style={{textAlign: "center"}}>
+              Development preview — not commercially available. This app is under active development and has not been
+              validated. Do not rely on it for medication storage or treatment decisions.
+            </p>
+            <p style={{textAlign: "center"}}>Version {APP_VERSION}</p>
+            <button type="button" onClick={() => setShowAbout(false)}>
+              Close
             </button>
           </div>
         </div>
@@ -1189,17 +1202,17 @@ function Log({
         </div>
         <div className="log-body">
         <p className="status">
-          Readings for tag {tag}. An entry is recorded whenever the temperature goes outside your set range.
+          Readings for tag {tag}. Every reading from the last 7 days is recorded.
         </p>
         {error && <p className="status error">{error}</p>}
         {points == null && <LogLoading />}
         {points?.length === 0 && !error && (
           <p className="log-empty">
             {latestMillis <= 0
-              ? "This tag has not reported any readings yet.\n\nOnce it does, any reading outside your set range will appear here."
+              ? "This tag has not reported any readings yet.\n\nOnce it does, they will appear here."
               : Date.now() - latestMillis >= STALE_READING_MS
                 ? `No readings from this tag in ${formatReadingAge(latestMillis, Date.now())}.\n\nThe tag may be out of range of a gateway, or its battery may be flat. Recording resumes automatically when it reports again.`
-                : "No out-of-range readings recorded.\n\nYour medication has stayed within your set range, so there is nothing to chart yet."}
+                : "No readings recorded for this period yet."}
           </p>
         )}
         {points && points.length > 0 && chart && (
@@ -1216,8 +1229,8 @@ function Log({
               </tr>
             </thead>
             <tbody>
-              {points.map((point) => (
-                <tr key={point.timestampMillis}>
+              {points.map((point, index) => (
+                <tr key={`${point.timestampMillis}-${index}`}>
                   <td>{new Date(point.timestampMillis).toLocaleString()}</td>
                   <td>
                     {profile.useCelsius

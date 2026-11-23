@@ -41,8 +41,31 @@ export async function deviceHistory(deviceId: string, days: number): Promise<Clo
   }
   const end = Math.floor(Date.now() / 1000);
   const start = end - days * 24 * 60 * 60;
-  const { packets } = await fetchDevices(start, deviceId, 80, end);
+  const collected: CloudDevice[] = [];
+  // Short windows stay within one or two Hubble pages, so a slow page cannot abort the whole week.
+  const chunk = 3 * 60 * 60;
+  for (let from = start; from < end; from += chunk) {
+    const to = Math.min(end, from + chunk);
+    collected.push(...(await collectWindow(deviceId, from, to)));
+  }
+  const seen = new Set<number>();
+  const packets: CloudDevice[] = [];
+  for (const packet of collected) {
+    if (seen.has(packet.timestampMillis)) continue;
+    seen.add(packet.timestampMillis);
+    packets.push(packet);
+  }
+  packets.sort((a, b) => a.timestampMillis - b.timestampMillis);
   return packets;
+}
+
+async function collectWindow(deviceId: string, start: number, end: number): Promise<CloudDevice[]> {
+  const { packets, truncated } = await fetchDevices(start, deviceId, 8, end);
+  if (!truncated || end - start <= 15 * 60) {
+    return packets;
+  }
+  const mid = start + Math.floor((end - start) / 2);
+  return [...(await collectWindow(deviceId, start, mid)), ...(await collectWindow(deviceId, mid, end))];
 }
 
 /** Newest packet with a payload for one device, looking back up to 12 hours. */
@@ -185,11 +208,23 @@ async function hubbleFetch(url: URL, continuation: string | null): Promise<Respo
   if (continuation) {
     headers["Continuation-Token"] = continuation;
   }
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
-  if (!response.ok) {
-    throw new Error(`Hubble ${url.pathname.endsWith("/devices") ? "devices" : "packets"} request failed (HTTP ${response.status})`);
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers, signal: AbortSignal.timeout(45_000) });
+      if (!response.ok) {
+        throw new Error(`Hubble ${url.pathname.endsWith("/devices") ? "devices" : "packets"} request failed (HTTP ${response.status})`);
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      const timedOut = error instanceof Error && /timeout|aborted/i.test(error.message);
+      if (!timedOut || attempt === 2) {
+        throw error;
+      }
+    }
   }
-  return response;
+  throw lastError;
 }
 
 function continuationToken(response: Response): string | null {

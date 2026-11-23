@@ -15,7 +15,7 @@ export type HistoryPoint = {
   timestampMillis: number;
   temperatureFahrenheit: number;
   humidityPercent: number | null;
-  level: "High" | "Low";
+  level: "High" | "Low" | "In range";
 };
 
 export type Reading = {

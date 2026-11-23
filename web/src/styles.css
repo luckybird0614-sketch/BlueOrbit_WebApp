@@ -141,6 +141,10 @@ select {
   font-size: 12px;
 }
 
+.status:has(+ .reading-layout) {
+  padding-left: 204px;
+}
+
 .status.error {
   color: #ffd0d0;
 }
@@ -160,8 +164,8 @@ select {
 }
 
 .reading-layout .thermometer {
-  width: 152px;
-  margin: 0;
+  width: 196px;
+  margin: -32px 0 -6px;
   flex: none;
 }
 
@@ -234,14 +238,6 @@ select {
   text-decoration: none;
 }
 
-.disclaimer,
-.version {
-  margin: 8px 0 0;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 12px;
-  line-height: 1.4;
-  text-align: center;
-}
 
 .auth-links {
   display: flex;
@@ -583,7 +579,7 @@ select {
   position: relative;
   width: min(100%, 300px);
   margin: 18px auto 0;
-  aspect-ratio: 613 / 1024;
+  aspect-ratio: 612 / 1024;
 }
 
 .thermo-media,
