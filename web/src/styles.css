@@ -194,16 +194,28 @@ select {
 }
 
 .day-count {
-  display: block;
+  display: inline-block;
   margin-top: 8px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #000;
+  padding: 4px 10px;
+  border: 1px solid #1565c0;
+  border-radius: 4px;
+  background: #e8f1fb;
+  color: #1565c0;
   font: inherit;
   font-size: 15px;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
+}
+
+.day-count:hover {
+  background: #d4e6f8;
+}
+
+.day-count.day-over {
+  border-color: #8a5800;
+  background: #fff4e0;
+  color: #8a5800;
 }
 
 .reading-card .strong {
@@ -431,6 +443,17 @@ select {
   margin-top: 8px;
   background: #e8e8e8;
   color: #111;
+}
+
+.alert-card .log-body,
+.alert-card .tips-copy {
+  color: #000;
+}
+
+.alert-card .tips-heading {
+  color: #000;
+  font-weight: 700;
+  font-size: 22px;
 }
 
 .tips-body {

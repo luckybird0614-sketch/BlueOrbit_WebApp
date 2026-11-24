@@ -197,10 +197,10 @@ function ScaleLabels({
 
   return (
     <g className="thermo-labels">
-      <text className="thermo-unit thermo-c" x="220" y="46">
+      <text className="thermo-unit thermo-c" x="220" y="0">
         °C
       </text>
-      <text className="thermo-unit thermo-f" x="392" y="46">
+      <text className="thermo-unit thermo-f" x="392" y="0">
         °F
       </text>
       {rows.map((mark) => {

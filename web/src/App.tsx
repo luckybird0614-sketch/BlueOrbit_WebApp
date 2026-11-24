@@ -320,7 +320,7 @@ function Auth({
   );
 }
 
-const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.3.1";
 const USE_PERIOD_DAYS = 56;
 const STALE_READING_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -367,6 +367,29 @@ function dayOfUsePeriod(start: number, now: number): number {
     return 0;
   }
   return Math.floor((now - start) / DAY_MS) + 1;
+}
+
+function expiryNoticeKey(userId: number): string {
+  return `bo-expiry-notice:${userId}`;
+}
+
+function medicationExpiryNotice(useDay: number): { id: string; title: string; message: string } | null {
+  if (useDay >= USE_PERIOD_DAYS) {
+    return {
+      id: "expired",
+      title: "Medication expired",
+      message: "Your medication has expired! Please replace it!",
+    };
+  }
+  const daysLeft = USE_PERIOD_DAYS - useDay;
+  if (daysLeft >= 1 && daysLeft <= 3) {
+    return {
+      id: `left-${daysLeft}`,
+      title: "Medication expiring",
+      message: `Only ${daysLeft} ${daysLeft === 1 ? "day" : "days"} left until your medication expires!`,
+    };
+  }
+  return null;
 }
 
 function formatReadingAge(then: number, now: number): string {
@@ -440,6 +463,7 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const [now, setNow] = useState(() => Date.now());
   const [periodStart, setPeriodStart] = useState(() => ensureUsePeriodStart(user.id));
   const [dayDialog, setDayDialog] = useState(false);
+  const [expiryOpen, setExpiryOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem(onboardingKey(user.id)) !== "1");
   const [confirmOpen, setConfirmOpen] = useState(
     () =>
@@ -452,6 +476,7 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const alertStateRef = useRef<AlertState>(loadAlertState(profile.id, profile.deviceId));
   const alertOpenRef = useRef(false);
   const openingReadingRef = useRef(true);
+  const expiryNotifiedRef = useRef("");
   const profileRef = useRef(profile);
   const rangeConfirmedRef = useRef(rangeConfirmed);
   profileRef.current = profile;
@@ -461,6 +486,31 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const notice = medicationExpiryNotice(dayOfUsePeriod(periodStart, now));
+    const noticeId = notice ? `${periodStart}:${notice.id}` : "";
+    if (!notice || !noticeId || localStorage.getItem(expiryNoticeKey(profile.id)) === noticeId) {
+      setExpiryOpen(false);
+      return;
+    }
+    if (onboardingOpen || confirmOpen || alert) {
+      return;
+    }
+    setExpiryOpen(true);
+    if (expiryNotifiedRef.current === noticeId) {
+      return;
+    }
+    expiryNotifiedRef.current = noticeId;
+    if ("Notification" in window && Notification.permission === "granted") {
+      const note = new Notification(notice.title, {
+        body: notice.message,
+        tag: "blueorbit-expiry",
+        requireInteraction: true,
+      });
+      note.onclick = () => window.focus();
+    }
+  }, [periodStart, now, onboardingOpen, confirmOpen, alert, profile.id]);
 
   useEffect(() => {
     saveOpenAlert(profile.id, null);
@@ -828,6 +878,11 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
           <button
             className={pastUseLimit ? "day-count day-over" : "day-count"}
             type="button"
+            aria-label={
+              pastUseLimit
+                ? `Reset day count. Day ${useDay}, past the ${USE_PERIOD_DAYS}-day limit`
+                : `Reset day count. Day ${useDay} of ${USE_PERIOD_DAYS}`
+            }
             onClick={() => setDayDialog(true)}
           >
             {pastUseLimit
@@ -897,13 +952,38 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
       {showAbout && (
         <div className="alert-backdrop" role="dialog" aria-modal="true" aria-labelledby="about-title">
           <div className="alert-card">
+          <div className="log-body tips-body">
             <p style={{textAlign: "center"}}>
-              Development preview — not commercially available. This app is under active development and has not been
-              validated. Do not rely on it for medication storage or treatment decisions.
+              <p className="tips-heading">MEDSTEMP™ © 2026 BlueOrbit Global, Inc.</p>
+              <p className="tips-copy">MEDSTEMP — THE SMARTER WAY TO PROTECT YOUR MEDICATION</p>
+              <p className="tips-copy">MedsTemp by BlueOrbit is intended to monitor location, temperature and humidity.</p>
+              <p className="tips-copy">MedsTemp is not a medical device.</p>
+              <p className="tips-copy">If you have medical or medication questions, please contact your health care provider.</p>
             </p>
+            </div>
             <p style={{textAlign: "center"}}>Version {APP_VERSION}</p>
             <button type="button" onClick={() => setShowAbout(false)}>
               Close
+            </button>
+          </div>
+        </div>
+      )}
+      {medicationExpiryNotice(useDay) && expiryOpen && (
+        <div className="alert-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="expiry-title">
+          <div className="alert-card">
+            <h2 id="expiry-title">{medicationExpiryNotice(useDay)?.title}</h2>
+            <p>{medicationExpiryNotice(useDay)?.message}</p>
+            <button
+              type="button"
+              onClick={() => {
+                const notice = medicationExpiryNotice(useDay);
+                if (notice) {
+                  localStorage.setItem(expiryNoticeKey(profile.id), `${periodStart}:${notice.id}`);
+                }
+                setExpiryOpen(false);
+              }}
+            >
+              OK
             </button>
           </div>
         </div>
@@ -980,16 +1060,19 @@ function Tips({ onClose }: { onClose: () => void }) {
     <main className="log-screen">
       <div className="phone log-phone">
         <div className="log-head">
-          <h1>Storage tips</h1>
+          <h1>Tips</h1>
           <button className="white-btn" type="button" onClick={onClose}>
             Close
           </button>
         </div>
         <div className="log-body tips-body">
-          <h2 className="tips-heading">Some important medication storage rules to follow</h2>
+          <h2 className="tips-heading">MEDSTEMP™ — THE SMARTER WAY TO PROTECT YOUR MEDICATION</h2>
+          <h2 className="tips-heading">
+          Storage tips
+          </h2>
           <p className="tips-copy">
-            Never allow your medications to freeze. Even when thawed out, most medications become ineffective and
-            should be discarded properly.
+          Never allow your medications to freeze. Even when thawed 
+          out, most medications become ineffective and should be discarded properly.
           </p>
           <p className="tips-copy">
             Refrigerated medications should be kept in the middle of the refrigerator — not on the back wall, to keep
@@ -1004,23 +1087,27 @@ function Tips({ onClose }: { onClose: () => void }) {
           <p className="tips-copy">
             Three of the most common enemies of safe medication storage are temperature, humidity and light.
           </p>
-          <h2 className="tips-heading">Proper humidity storage guidelines</h2>
-          <p className="tips-copy">To keep medications within the safe range below 60% relative humidity:</p>
-          <ol className="tips-list">
-            <li>Avoid the bathroom medicine cabinet. Bathrooms frequently reach 80–100% RH during hot showers.</li>
-            <li>
-              Keep desiccants in the bottle. Leave small silica gel packets inside original containers until the
-              medication is finished.
-            </li>
-            <li>
-              Store in cool, dry places. A bedroom closet or kitchen pantry away from appliances, heat and sinks
-              provides a stable ambient environment.
-            </li>
-          </ol>
-          <h2 className="tips-heading">About this guidance</h2>
           <p className="tips-copy">
-            This is general information. The instructions supplied with your medication, and its packaging label,
-            always take precedence over anything shown here.
+            Many medications in pill form are more susceptible to humidity and should not be refrigerated.
+          </p>
+          <h2 className="tips-heading">Proper humidity storage guidelines</h2>
+          <p className="tips-copy">To keep medications in pill form within the safe range which is typically recommended to store them below 60% relative humidity:</p>
+          {/* <ol className="tips-list"> */}
+            <p>Avoid the bathroom medicine cabinet. Bathrooms frequently reach 80–100% RH during hot showers.</p>
+            <p>
+              Keep desiccants in the original containers. 
+            </p>
+            <p>
+              Leave small silica gel packets inside original containers until the medication is finished. 
+            </p>
+            <p>
+              Store medication in cool, dry locations.
+            </p>
+            
+          {/* </ol> */}
+          <p className="tips-copy">
+            These tips are general information. The instructions supplied with your medication, 
+            and its packaging label, always take precedence over anything shown here.
           </p>
         </div>
       </div>
@@ -1229,7 +1316,7 @@ function Log({
               </tr>
             </thead>
             <tbody>
-              {points.map((point, index) => (
+              {[...points].reverse().map((point, index) => (
                 <tr key={`${point.timestampMillis}-${index}`}>
                   <td>{new Date(point.timestampMillis).toLocaleString()}</td>
                   <td>
