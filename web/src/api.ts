@@ -80,6 +80,7 @@ export const api = {
   }) => request<{ user: User }>("/api/profile", { method: "PUT", body: JSON.stringify(profile) }),
   resolveTag: (name: string) =>
     request<{ user: User }>("/api/tags/resolve", { method: "POST", body: JSON.stringify({ name }) }),
+  devices: () => request<{ devices: { id: string; name: string }[] }>("/api/devices"),
   reading: () => request<Reading>("/api/tags/reading"),
   history: () => request<{ points: HistoryPoint[] }>("/api/tags/history"),
 };

@@ -362,6 +362,36 @@ function ensureUsePeriodStart(userId: number): number {
   return now;
 }
 
+function findAvailableTag(
+  devices: { id: string; name: string }[],
+  query: string,
+): { id: string; name: string } | null {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  const queryMut = normalized.includes("mut");
+  const querySut = !queryMut && normalized.includes("sut");
+  const candidates = devices.filter((device) => {
+    const nameNorm = device.name.trim().toLowerCase();
+    if (!nameNorm) {
+      return false;
+    }
+    const nameMut = nameNorm.includes("mut");
+    const nameSut = !nameMut && nameNorm.includes("sut");
+    return !((queryMut && nameSut) || (querySut && nameMut));
+  });
+  const exact = candidates.find((device) => device.name.trim().toLowerCase() === normalized);
+  if (exact) {
+    return exact;
+  }
+  if (normalized.length < 3) {
+    return null;
+  }
+  const hits = candidates.filter((device) => device.name.trim().toLowerCase().includes(normalized));
+  return hits.length === 1 ? hits[0] : null;
+}
+
 function dayOfUsePeriod(start: number, now: number): number {
   if (start <= 0 || now < start) {
     return 0;
@@ -479,8 +509,65 @@ function Home({ user, onUser }: { user: User; onUser: (user: User | null) => voi
   const expiryNotifiedRef = useRef("");
   const profileRef = useRef(profile);
   const rangeConfirmedRef = useRef(rangeConfirmed);
+  const tagLookupRef = useRef(0);
+  const knownTagsRef = useRef<{ id: string; name: string }[] | null>(null);
   profileRef.current = profile;
   rangeConfirmedRef.current = rangeConfirmed;
+
+  useEffect(() => {
+    const typed = tagName.trim();
+    if (!typed) {
+      return;
+    }
+    const seq = ++tagLookupRef.current;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          if (!knownTagsRef.current) {
+            knownTagsRef.current = (await api.devices()).devices;
+          }
+          if (seq !== tagLookupRef.current) {
+            return;
+          }
+          const match = findAvailableTag(knownTagsRef.current, typed);
+          if (!match) {
+            return;
+          }
+          const current = profileRef.current;
+          if (match.id === current.deviceId) {
+            if (typed.toLowerCase() !== match.name.trim().toLowerCase()) {
+              setTagName(match.name);
+            }
+            return;
+          }
+          setError("");
+          setStatus("Looking up the tag…");
+          const result = await api.resolveTag(match.name);
+          if (seq !== tagLookupRef.current) {
+            return;
+          }
+          alertStateRef.current = resetAlertState(current.id, result.user.deviceId);
+          alertOpenRef.current = false;
+          openingReadingRef.current = true;
+          setAlert(null);
+          setProfile(result.user);
+          onUser(result.user);
+          setTagName(result.user.deviceName || match.name);
+          if (!isRangeConfirmed(result.user.id, result.user.storageLowF, result.user.storageHighF)) {
+            setConfirmOpen(true);
+          }
+          setStatus("");
+        } catch (caught) {
+          if (seq !== tagLookupRef.current) {
+            return;
+          }
+          setStatus("");
+          setError(caught instanceof Error ? caught.message : "Could not resolve the tag");
+        }
+      })();
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [tagName, onUser]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -1850,7 +1937,7 @@ function toFahrenheit(value: number, celsius: boolean): number {
 async function scanTag(setTagName: (name: string) => void, setStatus: (status: string) => void) {
   const Detector = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector;
   if (!Detector || !navigator.mediaDevices?.getUserMedia) {
-    setStatus("Camera QR scan is unavailable in this browser. Type the tag name and press Enter.");
+    setStatus("Camera QR scan is unavailable in this browser. Type the tag name.");
     return;
   }
   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
@@ -1874,7 +1961,7 @@ async function scanTag(setTagName: (name: string) => void, setStatus: (status: s
     return;
   }
   setTagName(found);
-  setStatus(`Tag: ${found}. Press Enter to look it up.`);
+  setStatus(`Tag: ${found}`);
 }
 
 type BarcodeDetectorConstructor = new (options?: { formats?: string[] }) => {
